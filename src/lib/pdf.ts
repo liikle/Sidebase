@@ -146,7 +146,7 @@ export async function downloadReportPdf(report: Report): Promise<void> {
 
   const footer = () => {
     font('normal', 8, C.muted)
-    doc.text('sidebase.cc', M, H - 26)
+    doc.text(window.location.host, M, H - 26)
     doc.text(String(pageNo), W - M, H - 26, { align: 'right' })
   }
 

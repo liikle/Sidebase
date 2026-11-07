@@ -1,6 +1,6 @@
 # Sidebase
 
-**Find Your Next Income Stream.** — [sidebase.cc](https://sidebase.cc)
+**Find Your Next Income Stream.**
 
 Sidebase matches people with online business ideas and side hustles that fit their skills, interests, budget and time. A free
 7-question finder ranks 58 vetted opportunities and shows the top three; a one-time **$7.99** purchase unlocks the full report: the top ten
@@ -85,7 +85,7 @@ src/                    React app (Vite + TypeScript + Tailwind v4 + Framer Moti
   pages/                Home, Finder, Results, Report, Explore, Idea, About, legal…
   components/           UI primitives, layout, home sections, report drawer
   lib/                  API client, storage, SEO, PDF generator, site config
-public/                 Favicons, OG image, robots.txt, _headers, _redirects, manifest
+public/                 Favicons, OG image, _headers, _redirects, manifest (sitemap/robots are served by the Worker)
 tests/                  Vitest: scoring, encoding, content completeness, webhook signatures
 scripts/                generate-assets.mjs renders the OG image and icons
 ```
@@ -122,20 +122,20 @@ See [`.env.example`](.env.example).
 | `STRIPE_SECRET_KEY` | Secret | Yes | `sk_test_…` for testing, `sk_live_…` for production |
 | `STRIPE_WEBHOOK_SECRET` | Secret | Yes | `whsec_…` signing secret of your webhook endpoint |
 | `STRIPE_PRICE_ID` | Variable | No | `price_…` to use a Stripe Product/Price. If unset, an inline $7.99 USD price is used |
-| `SITE_URL` | Variable | Recommended | `https://sidebase.cc`. Used for Stripe redirect URLs |
+| `SITE_URL` | Variable | No | Canonical origin for Stripe redirects, `sitemap.xml` and `robots.txt`. Unset = the address the site is served on |
 | `PURCHASES` | KV binding | Recommended | KV namespace recording verified purchases and refunds |
 
 Without the `PURCHASES` binding, payments still work: `/api/report` then verifies each request directly with Stripe. Refund
 revocation needs KV.
 
-Check your configuration at any time: `https://sidebase.cc/api/health`.
+Check your configuration at any time: `https://<your site>/api/health`.
 
 ## Stripe setup
 
 1. Create or sign in to your Stripe account at [dashboard.stripe.com](https://dashboard.stripe.com).
 2. **Business details:** complete account activation (business info, bank account) so you can accept live payments.
 3. **Public details** (Settings → Business → Public details): set the business name *Sidebase*, the support email and the website
-   `https://sidebase.cc`. Customers see these on Checkout and receipts.
+   (your `workers.dev` URL for now, `https://sidebase.cc` once you own it). Customers see these on Checkout and receipts.
 4. **Branding** (Settings → Branding): upload `brand/sidebase-icon-1024.png` as the icon and `brand/sidebase-logo.png` as the logo, then set the brand color `#13C2FD` and the accent `#080B12`.
 5. **Receipts** (Settings → Customer emails): turn on *Successful payments* so buyers get an email receipt.
 6. **Optional product/price:** Product catalog → Add product → "Sidebase Full Side Hustle Report", one-time **$7.99 USD**.
@@ -186,12 +186,15 @@ npx wrangler secret put STRIPE_WEBHOOK_SECRET    # whsec_… (see the next secti
 
 Alternatively, use the dashboard: Worker → **Settings → Variables and Secrets** → Add → type **Secret**.
 
-Optional plain variables (dashboard, or a `"vars"` block in `wrangler.jsonc`): `SITE_URL` = `https://sidebase.cc`, and
-`STRIPE_PRICE_ID`. If `SITE_URL` is unset, Stripe redirects back to whichever domain the visitor used, which is fine.
+Optional plain variables (dashboard, or a `"vars"` block in `wrangler.jsonc`): `SITE_URL` and `STRIPE_PRICE_ID`.
+
+**No domain is hard-coded.** The frontend reads its address at runtime, and the Worker builds Stripe redirect URLs,
+`sitemap.xml` and `robots.txt` from the request's host. The site therefore works on `https://sidebase.<your-subdomain>.workers.dev`
+as-is. Once a custom domain is attached, set `SITE_URL` to it so those always point at the canonical address.
 
 ### Custom domain
 
-Worker → **Settings → Domains & Routes → Add → Custom domain** → `sidebase.cc` (and optionally `www.sidebase.cc`). This requires
+Once you own the domain: Worker → **Settings → Domains & Routes → Add → Custom domain** → `sidebase.cc` (and optionally `www.sidebase.cc`). This requires
 the domain's DNS to be on Cloudflare (add the site under **Websites** first, and switch nameservers at your registrar).
 Until then, the site is live at `https://sidebase.<your-subdomain>.workers.dev`.
 
@@ -205,7 +208,8 @@ Every push to GitHub also runs CI (typecheck, tests, build) via `.github/workflo
 ## Stripe webhook configuration
 
 1. Stripe dashboard → **Developers → Webhooks → Add endpoint**.
-2. Endpoint URL: `https://sidebase.cc/api/stripe-webhook`
+2. Endpoint URL: `https://<your site>/api/stripe-webhook`, e.g. `https://sidebase.<your-subdomain>.workers.dev/api/stripe-webhook`.
+   If you later move to a custom domain, update the endpoint URL in Stripe (the signing secret stays the same).
 3. Select these events:
    - `checkout.session.completed`
    - `checkout.session.async_payment_succeeded`
@@ -237,7 +241,7 @@ Test mode and live mode have **separate** webhook endpoints and signing secrets.
 3. Create the **live** webhook endpoint (same URL and events) and copy its live `whsec_…`.
 4. If you use `STRIPE_PRICE_ID`, create the product in live mode and use the **live** `price_…`.
 5. Update the Worker's secrets in Cloudflare (`npx wrangler secret put …`). They take effect immediately.
-6. Check that `https://sidebase.cc/api/health` shows `"mode":"live"`, `"webhook":true` and `"purchasesStore":true`.
+6. Check that `https://<your site>/api/health` shows `"mode":"live"`, `"webhook":true` and `"purchasesStore":true`.
 7. Make one real purchase, then refund it to confirm the full loop.
 
 ## Before launch checklist
@@ -247,8 +251,9 @@ Test mode and live mode have **separate** webhook endpoints and signing secrets.
 - [ ] Set up email forwarding for the support address.
 - [ ] Configure Stripe public details, branding and receipts (see [Stripe setup](#stripe-setup)).
 - [ ] Decide on sales tax or VAT collection (Stripe Tax).
-- [ ] Add the Stripe secrets, create the webhook, attach `sidebase.cc`, and confirm `/api/health`.
-- [ ] Submit `https://sidebase.cc/sitemap.xml` in Google Search Console.
+- [ ] Add the Stripe secrets, create the webhook, and confirm `/api/health`.
+- [ ] Attach your domain and set `SITE_URL`, then submit `https://<domain>/sitemap.xml` in Google Search Console.
+- [ ] Set up a support email address you actually receive, and put it in `src/lib/site.ts`.
 - [ ] Optional: enable cookieless **Cloudflare Web Analytics** for the site.
 
 ## Editing content

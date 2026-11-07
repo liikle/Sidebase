@@ -44,7 +44,7 @@ export async function handleCheckout(request: Request, env: Env): Promise<Respon
     allow_promotion_codes: 'true',
     billing_address_collection: 'auto',
     'custom_text[submit][message]':
-      'One-time payment — no subscription. By paying you request immediate access to your digital report and acknowledge that your statutory right of withdrawal ends once the report is delivered. See sidebase.cc/refunds.',
+      `One-time payment — no subscription. By paying you request immediate access to your digital report and acknowledge that your statutory right of withdrawal ends once the report is delivered. See ${origin.replace(/^https?:\/\//, '')}/refunds.`,
   }
 
   if (env.STRIPE_PRICE_ID) {

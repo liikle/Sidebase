@@ -69,3 +69,15 @@ describe('session id validation', () => {
     expect(SESSION_ID_RE.test('cs_test_../../etc')).toBe(false)
   })
 })
+
+describe('sitemap and robots', () => {
+  it('builds absolute URLs from the given origin, with no hard-coded domain', async () => {
+    const { buildSitemap, buildRobots, sitemapRoutes } = await import('../shared/sitemap.ts')
+    const origin = 'https://sidebase.example.workers.dev'
+    const xml = buildSitemap(`${origin}/`)
+    expect(xml.match(/<loc>/g)?.length).toBe(sitemapRoutes().length)
+    expect(xml).toContain(`<loc>${origin}/explore/kdp-publishing</loc>`)
+    expect(xml).not.toContain('sidebase.cc')
+    expect(buildRobots(origin)).toContain(`Sitemap: ${origin}/sitemap.xml`)
+  })
+})

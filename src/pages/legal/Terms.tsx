@@ -9,7 +9,7 @@ export default function Terms() {
   return (
     <LegalPage
       title="Terms of Service"
-      intro={<>These terms apply to your use of {SITE.url.replace('https://', '')} (“Sidebase”, “we”, “us”), operated by {SITE.operator}. By using the site you agree to them.</>}
+      intro={<>These terms apply to your use of {SITE.host} (“Sidebase”, “we”, “us”), operated by {SITE.operator}. By using the site you agree to them.</>}
     >
       <h2>1. What Sidebase provides</h2>
       <p>

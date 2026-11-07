@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /report
-Disallow: /results
-
-Sitemap: https://sidebase.cc/sitemap.xml

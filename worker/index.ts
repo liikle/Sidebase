@@ -2,14 +2,15 @@
  * Cloudflare Worker entry for Sidebase.
  *
  * Static files (the built React app in ./dist) are served by Workers Static Assets.
- * Only requests under /api/* reach this script (see `run_worker_first` in wrangler.jsonc);
- * everything else goes straight to the assets, with SPA fallback to index.html.
+ * Only /api/*, /sitemap.xml and /robots.txt reach this script (see `run_worker_first` in
+ * wrangler.jsonc); everything else goes straight to the assets, with SPA fallback to index.html.
  */
 import { handleCheckout } from '../functions/api/checkout.ts'
 import { handleHealth } from '../functions/api/health.ts'
 import { handleReport } from '../functions/api/report.ts'
 import { handleStripeWebhook } from '../functions/api/stripe-webhook.ts'
 import { type Env, errorJson } from '../functions/_lib/env.ts'
+import { buildRobots, buildSitemap } from '../shared/sitemap.ts'
 
 interface WorkerEnv extends Env {
   ASSETS: Fetcher
@@ -26,7 +27,19 @@ const ROUTES: Record<string, { method: 'GET' | 'POST'; handler: Handler }> = {
 
 export default {
   async fetch(request, env): Promise<Response> {
-    const { pathname } = new URL(request.url)
+    const url = new URL(request.url)
+    const { pathname } = url
+
+    if (pathname === '/sitemap.xml' || pathname === '/robots.txt') {
+      const origin = env.SITE_URL || url.origin
+      const xml = pathname === '/sitemap.xml'
+      return new Response(xml ? buildSitemap(origin) : buildRobots(origin), {
+        headers: {
+          'content-type': xml ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8',
+          'cache-control': 'public, max-age=3600',
+        },
+      })
+    }
 
     if (!pathname.startsWith('/api/')) return env.ASSETS.fetch(request)
 
