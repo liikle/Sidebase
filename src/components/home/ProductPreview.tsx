@@ -56,7 +56,7 @@ export function ProductPreview() {
         {/* Window bar */}
         <div className="flex h-11 items-center justify-between border-b border-line bg-ink-900/60 px-4">
           <div className="flex items-center gap-2.5">
-            <LogoMark className="h-5 w-5" />
+            <LogoMark className="h-[18px]" />
             <span className="text-[13px] font-medium text-fg">Your Side Hustle Report</span>
           </div>
           <span className="hidden items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[11px] text-muted sm:inline-flex">

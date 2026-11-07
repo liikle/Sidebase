@@ -129,7 +129,7 @@ export default function Finder() {
       <header className="sticky top-0 z-30 border-b border-line bg-ink-950/85 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-5 sm:px-8">
           <Link to="/" aria-label="Sidebase home" className="rounded-lg">
-            <Logo />
+            <Logo className="h-6 sm:h-7" />
           </Link>
           {phase === 'questions' && (
             <p className="text-sm tabular-nums text-muted" aria-live="polite">

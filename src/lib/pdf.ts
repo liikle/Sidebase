@@ -1,3 +1,4 @@
+import { LOGO, lockupSvg } from '@shared/brand'
 import { DIFFICULTY_LABEL, formatCost, formatHours } from '@shared/ideas'
 import type { Report, ReportItem } from '@shared/types'
 import { profileRows } from '../components/results/ProfileSummary'
@@ -28,8 +29,32 @@ function clean(s: string): string {
     .replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '')
 }
 
+/** Rasterizes an SVG string to a PNG data URL (used to embed the vector logo crisply). */
+async function svgToPng(svg: string, width: number, height: number): Promise<string> {
+  const img = new Image()
+  img.decoding = 'async'
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve()
+    img.onerror = () => reject(new Error('Logo could not be rendered'))
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  })
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas unavailable')
+  ctx.drawImage(img, 0, 0, width, height)
+  return canvas.toDataURL('image/png')
+}
+
 export async function downloadReportPdf(report: Report): Promise<void> {
   const { jsPDF } = await import('jspdf')
+  const ratio = LOGO.width / LOGO.height
+  const RASTER_H = 240
+  const [logoOnDark, logoOnLight] = await Promise.all([
+    svgToPng(lockupSvg('onDark', 'pdfd'), Math.round(RASTER_H * ratio), RASTER_H),
+    svgToPng(lockupSvg('onLight', 'pdfl'), Math.round(RASTER_H * ratio), RASTER_H),
+  ])
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
@@ -43,24 +68,9 @@ export async function downloadReportPdf(report: Report): Promise<void> {
     doc.setTextColor(...color)
   }
 
-  const drawMark = (x: number, top: number, s: number) => {
-    const k = s / 32
-    doc.setFillColor(...C.sky)
-    doc.roundedRect(x, top, s, s, 8 * k, 8 * k, 'F')
-    doc.setFillColor(...C.ink)
-    doc.roundedRect(x + 8 * k, top + 8.5 * k, 10 * k, 3.5 * k, 1.75 * k, 1.75 * k, 'F')
-    doc.roundedRect(x + 14 * k, top + 14.25 * k, 10 * k, 3.5 * k, 1.75 * k, 1.75 * k, 'F')
-    doc.roundedRect(x + 8 * k, top + 20 * k, 16 * k, 3.5 * k, 1.75 * k, 1.75 * k, 'F')
-  }
-
-  const wordmark = (x: number, baseline: number, size: number, sideColor: RGB) => {
-    font('bold', size, sideColor)
-    doc.setCharSpace(size * 0.14)
-    doc.text('SIDE', x, baseline)
-    const w = doc.getTextWidth('SIDE') + size * 0.14 * 4
-    doc.setTextColor(...C.sky)
-    doc.text('BASE', x + w, baseline)
-    doc.setCharSpace(0)
+  /** Draws the Sidebase lockup with its top-left corner at (x, top) and the given height in points. */
+  const drawLogo = (x: number, top: number, h: number, variant: 'onDark' | 'onLight') => {
+    doc.addImage(variant === 'onDark' ? logoOnDark : logoOnLight, 'PNG', x, top, h * ratio, h, undefined, 'FAST')
   }
 
   const generated = new Date(report.generatedAt).toLocaleDateString('en-US', {
@@ -72,8 +82,7 @@ export async function downloadReportPdf(report: Report): Promise<void> {
   // ───────────── Cover ─────────────
   doc.setFillColor(...C.ink)
   doc.rect(0, 0, W, H, 'F')
-  drawMark(M, M, 26)
-  wordmark(M + 36, M + 18, 12, C.white)
+  drawLogo(M, M, 26, 'onDark')
 
   font('normal', 10, C.sky)
   doc.text('PERSONAL REPORT', M, 128)
@@ -146,8 +155,7 @@ export async function downloadReportPdf(report: Report): Promise<void> {
     pageNo++
     doc.setFillColor(255, 255, 255)
     doc.rect(0, 0, W, H, 'F')
-    drawMark(M, 30, 16)
-    wordmark(M + 23, 42, 8.5, C.text)
+    drawLogo(M, 29, 15, 'onLight')
     if (title) {
       font('normal', 8.5, C.muted)
       doc.text(clean(title), W - M, 42, { align: 'right' })

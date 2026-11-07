@@ -36,7 +36,7 @@ export function Footer() {
       <Container className="py-14">
         <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div className="max-w-xs">
-            <Logo />
+            <Logo className="h-8" />
             <p className="mt-4 text-sm leading-relaxed text-muted">{SITE.tagline} Personalized online business ideas with clear starting steps.</p>
           </div>
           {COLUMNS.map((col) => (

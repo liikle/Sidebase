@@ -25,6 +25,7 @@ matches, each with a launch plan, tools, first-customer and first-sale guidance,
 9. [Switching to live mode](#switching-to-live-mode)
 10. [Before launch checklist](#before-launch-checklist)
 11. [Editing content](#editing-content)
+12. [Brand & logo](#brand--logo)
 
 ---
 
@@ -133,7 +134,7 @@ Check your configuration at any time: `https://sidebase.cc/api/health`.
 2. **Business details:** complete account activation (business info, bank account) so you can accept live payments.
 3. **Public details** (Settings → Business → Public details): set the business name *Sidebase*, the support email and the website
    `https://sidebase.cc`. Customers see these on Checkout and receipts.
-4. **Branding** (Settings → Branding): upload `public/icon-512.png`, set the brand color `#38BDF8` and the accent `#080B12`.
+4. **Branding** (Settings → Branding): upload `brand/sidebase-icon-1024.png` as the icon and `brand/sidebase-logo.png` as the logo, then set the brand color `#13C2FD` and the accent `#080B12`.
 5. **Receipts** (Settings → Customer emails): turn on *Successful payments* so buyers get an email receipt.
 6. **Optional product/price:** Product catalog → Add product → "Sidebase Full Side Hustle Report", one-time **$7.99 USD**.
    Copy the `price_…` ID into `STRIPE_PRICE_ID`. Skip this to use the built-in inline price.
@@ -252,3 +253,26 @@ Test mode and live mode have **separate** webhook endpoints and signing secrets.
 - **OG image and icons:** edit `scripts/generate-assets.mjs`, then run `npm run assets`.
 
 Sidebase makes no income claims. Keep it that way when adding content: describe realistic ranges, never guaranteed earnings.
+
+## Brand & logo
+
+The logo is a true vector reconstruction of the official artwork (`brand/sidebase-logo-reference.png`), checked against it at
+≥97% shape overlap with a mean color error under 5/255.
+
+- **Source of truth:** `shared/brand.ts`. It holds the path data, the three-facet gradient of the "S" (folded-ribbon effect) and
+  the lockup colors. The React `<Logo/>` and `<LogoMark/>` (`src/components/ui/Logo.tsx`), the PDF report, the favicon and all
+  generated images are built from it.
+- **Variants:** `onDark` (white "Sidebase") for dark backgrounds and `onLight` (ink "Sidebase", light divider) for light ones.
+- **Files** in `brand/`:
+  - `sidebase-logo.svg` / `sidebase-logo-on-light.svg` (full lockup)
+  - `sidebase-mark.svg` (the "S" only)
+  - `sidebase-logo.png`, `sidebase-logo-transparent.png`, `sidebase-icon-1024.png` (for social profiles and Stripe branding)
+- Regenerate every derived asset (favicon, app icons, OG image, brand exports) with `npm run assets`.
+
+| Color | Hex |
+| --- | --- |
+| Mark, upper hook | `#13B8FD` → `#1CD2FD` |
+| Mark, middle band | `#029EFD` → `#09B2FD` |
+| Mark, lower hook (radial) | `#0083FE` → `#11C6FD` |
+| ".cc" | `#13C2FD` |
+| Divider | `#494949` |

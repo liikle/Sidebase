@@ -43,7 +43,7 @@ export function Navbar() {
     >
       <Container className="flex h-16 items-center justify-between">
         <Link to="/" aria-label="Sidebase home" className="rounded-lg">
-          <Logo />
+          <Logo className="h-[26px] sm:h-[30px]" />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
