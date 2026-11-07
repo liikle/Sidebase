@@ -8,7 +8,7 @@ import { StripeError, stripe } from '../_lib/stripe.ts'
  * Body: { answers: Answers, consent: true }
  * Creates a Stripe Checkout Session for the one-time report purchase and returns its URL.
  */
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export async function handleCheckout(request: Request, env: Env): Promise<Response> {
   if (!env.STRIPE_SECRET_KEY) {
     return errorJson('Payments are not configured yet. Please try again later.', 503, 'not_configured')
   }
@@ -65,3 +65,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return errorJson('We could not start checkout. Please try again in a moment.', status, 'stripe_error')
   }
 }
+
+/** Cloudflare Pages Functions entry (the Worker in worker/index.ts calls handleCheckout directly). */
+export const onRequestPost: PagesFunction<Env> = ({ request, env }) => handleCheckout(request, env)

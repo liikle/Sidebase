@@ -21,7 +21,7 @@ interface ChargeObject {
  * Subscribe the endpoint to:
  *   checkout.session.completed, checkout.session.async_payment_succeeded, charge.refunded
  */
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export async function handleStripeWebhook(request: Request, env: Env): Promise<Response> {
   if (!env.STRIPE_WEBHOOK_SECRET) return errorJson('Webhook not configured', 503)
 
   const rawBody = await request.text()
@@ -69,3 +69,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   return json({ received: true })
 }
+
+/** Cloudflare Pages Functions entry (the Worker in worker/index.ts calls handleStripeWebhook directly). */
+export const onRequestPost: PagesFunction<Env> = ({ request, env }) => handleStripeWebhook(request, env)

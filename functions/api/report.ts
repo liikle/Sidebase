@@ -21,7 +21,7 @@ interface RetrievedSession {
  *  2. If the webhook has not arrived yet, the session is fetched from Stripe with the
  *     secret key (server-to-server) and must be `paid`. The redirect alone is never trusted.
  */
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+export async function handleReport(request: Request, env: Env): Promise<Response> {
   const sessionId = new URL(request.url).searchParams.get('session_id') ?? ''
   if (!SESSION_ID_RE.test(sessionId)) return errorJson('Invalid purchase reference.', 400, 'invalid_session')
 
@@ -71,3 +71,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
   return json({ status: 'paid', report: buildReport(answers, new Date(record.paidAt)) })
 }
+
+/** Cloudflare Pages Functions entry (the Worker in worker/index.ts calls handleReport directly). */
+export const onRequestGet: PagesFunction<Env> = ({ request, env }) => handleReport(request, env)

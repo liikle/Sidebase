@@ -3,16 +3,16 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Sidebase — find your next online income stream.",
+  "description": "Sidebase \u2014 find your next online income stream.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "pages:dev": "npm run build && wrangler pages dev dist --kv PURCHASES --compatibility-date=2025-01-01",
-    "pages:deploy": "npm run build && wrangler pages deploy dist --project-name sidebase",
-    "assets": "node scripts/generate-assets.mjs"
+    "assets": "node scripts/generate-assets.mjs",
+    "dev:full": "npm run build && wrangler dev --port 8788",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

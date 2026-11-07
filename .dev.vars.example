@@ -2,8 +2,8 @@
 # Sidebase environment variables
 #
 # The frontend needs NO environment variables — nothing secret ever ships to the
-# browser. Everything below is used only by the Cloudflare Pages Functions in
-# /functions and must be configured in:
+# browser. Everything below is used only by the Cloudflare Worker (worker/ +
+# functions/) and must be set as secrets: `npx wrangler secret put NAME`, or in
 #   Cloudflare dashboard → Workers & Pages → sidebase → Settings → Variables and Secrets
 #
 # For local development copy this file to `.dev.vars` (git-ignored) and fill it in.
@@ -26,4 +26,4 @@ STRIPE_PRICE_ID=
 SITE_URL=https://sidebase.cc
 
 # Binding (not a variable): a Workers KV namespace bound as PURCHASES.
-# Configure under Settings → Bindings. Locally, `npm run pages:dev` creates one automatically.
+# Already declared in wrangler.jsonc. Locally, `npm run dev:full` creates one automatically.

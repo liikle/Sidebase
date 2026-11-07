@@ -8,7 +8,7 @@ matches, each with a launch plan, tools, first-customer and first-sale guidance,
 
 - No accounts, no logins, no database server, no AI APIs, no subscriptions.
 - Matching runs in the browser with deterministic, rules-based scoring.
-- Payments run through Stripe Checkout, created and verified by Cloudflare Pages Functions. No secret ever reaches the browser.
+- Payments run through Stripe Checkout, created and verified by a Cloudflare Worker. No secret ever reaches the browser.
 
 ---
 
@@ -19,7 +19,7 @@ matches, each with a launch plan, tools, first-customer and first-sale guidance,
 3. [Local development](#local-development)
 4. [Environment variables](#environment-variables)
 5. [Stripe setup](#stripe-setup)
-6. [Deploying to Cloudflare Pages](#deploying-to-cloudflare-pages)
+6. [Deploying to Cloudflare](#deploying-to-cloudflare)
 7. [Stripe webhook configuration](#stripe-webhook-configuration)
 8. [Testing payments (test mode)](#testing-payments-test-mode)
 9. [Switching to live mode](#switching-to-live-mode)
@@ -32,10 +32,10 @@ matches, each with a launch plan, tools, first-customer and first-sale guidance,
 ## Architecture
 
 ```
-Browser (React SPA, static on Cloudflare Pages)
+Browser (React SPA, served as Cloudflare Workers static assets)
   │  Finder → scores 58 ideas locally (shared/scoring.ts) → free top-3 preview
   │
-  ├─ POST /api/checkout ──────────► Pages Function ──► Stripe: create Checkout Session
+  ├─ POST /api/checkout ──────────► Worker ──► Stripe: create Checkout Session
   │      { answers, consent }        (answers stored in session metadata, $7.99 one-time)
   │
   │  … customer pays on checkout.stripe.com …
@@ -43,7 +43,7 @@ Browser (React SPA, static on Cloudflare Pages)
   │                       Stripe ──► POST /api/stripe-webhook (signature verified)
   │                                    └─► KV "PURCHASES": session → paid (no personal data)
   │
-  └─ GET /api/report?session_id=cs_… ► Pages Function
+  └─ GET /api/report?session_id=cs_… ► Worker
          1. Paid record in KV (written by the verified webhook)?  → build report
          2. Otherwise ask Stripe directly (secret key, server-side) → must be `paid`
          3. Refunded → 410. Unpaid → 402. Async payment processing → 202 (UI polls)
@@ -55,24 +55,26 @@ Browser (React SPA, static on Cloudflare Pages)
 - The success-page redirect is never trusted. The report is only returned after the server confirms payment, either from a
   signature-verified webhook or by fetching the Checkout Session from Stripe with the secret key.
 - The answers used to build the report come from the Checkout Session's metadata, so they cannot be swapped after payment.
-- The paid content (`functions/_lib/content/*`) lives only in the Functions bundle and is never shipped to the browser. CI can
+- The paid content (`functions/_lib/content/*`) lives only in the Worker bundle and is never shipped to the browser. CI can
   confirm this: `grep -r "Download free footage from Pexels" dist/` returns nothing.
 - Webhook signatures are verified with HMAC-SHA256, constant-time comparison and a 5-minute replay window.
 - Full refunds (`charge.refunded`) revoke access.
 - The Checkout Session ID works as the purchase reference. It is long, random and stored only in the buyer's browser and URL.
 
-**Cost:** Cloudflare Pages, Functions and KV free tiers cover a lot of traffic. Stripe charges only per transaction.
+**Cost:** Cloudflare's Workers (static assets requests are free) and KV free tiers cover a lot of traffic. Stripe charges only per transaction.
 
 ## Project structure
 
 ```
-shared/                 Used by both the browser and the Functions
+shared/                 Used by both the browser and the Worker
   types.ts              Domain types
   questions.ts          The 7 questions, validation, compact answer encoding
   ideas.ts              Public catalog of 58 ideas (cost, time, difficulty, skills, model…)
   scoring.ts            Deterministic matching engine (weights + explanations)
   pricing.ts            The $7.99 price, single source of truth
-functions/              Cloudflare Pages Functions (server side)
+worker/index.ts         Worker entry: routes /api/* to the handlers, everything else to static assets
+wrangler.jsonc          Worker config: name, static assets (dist/), KV binding
+functions/              Server-side API handlers (also usable as Cloudflare Pages Functions)
   api/checkout.ts       POST: creates the Stripe Checkout Session
   api/stripe-webhook.ts POST: verifies Stripe signatures, records purchases, handles refunds
   api/report.ts         GET: verifies payment and returns the full report
@@ -98,14 +100,14 @@ npm test            # unit tests
 npm run dev         # frontend only, at http://localhost:5173
 ```
 
-To run the full stack (frontend and Functions, with a local KV store):
+To run the full stack (frontend and API Worker, with a local KV store):
 
 ```bash
 cp .dev.vars.example .dev.vars     # then fill in your Stripe TEST keys
-npm run pages:dev                  # http://localhost:8788
+npm run dev:full                   # http://localhost:8788
 ```
 
-`npm run dev` proxies `/api/*` to `localhost:8788`, so you can run `pages:dev` in one terminal and `dev` in another to get hot reload
+`npm run dev` proxies `/api/*` to `localhost:8788`, so you can run `dev:full` in one terminal and `dev` in another to get hot reload
 with working APIs.
 
 Other scripts: `npm run typecheck`, `npm run build`, `npm run assets` (regenerate the OG image and icons).
@@ -143,55 +145,60 @@ Check your configuration at any time: `https://sidebase.cc/api/health`.
 8. **API keys** (Developers → API keys): copy the **secret** key. The publishable key is not needed, because Checkout is hosted
    by Stripe.
 
-## Deploying to Cloudflare Pages
+## Deploying to Cloudflare
 
-### 1. Create the Pages project
+Sidebase deploys as a single **Cloudflare Worker** named `sidebase` ([`wrangler.jsonc`](wrangler.jsonc)). The Worker serves the
+built app from `dist/` as static assets (with `public/_headers` and `public/_redirects` applied) and handles `/api/*`.
 
-1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
-2. Select this GitHub repository and the production branch (`main`).
-3. Build settings:
-   - Framework preset: **None** (or Vite)
+The KV namespace `sidebase-purchases` already exists and is bound as `PURCHASES` in `wrangler.jsonc`. If you deploy to a different
+Cloudflare account, create a namespace (`npx wrangler kv namespace create sidebase-purchases`) and put its id in `wrangler.jsonc`.
+
+### Option A: deploy on every push (Git integration, recommended)
+
+1. Cloudflare dashboard → **Workers & Pages** → the **sidebase** Worker → **Settings → Build** → **Connect** your GitHub repository.
+   (Or **Create → Import a repository** if the Worker doesn't exist yet. Use the name `sidebase`, matching `wrangler.jsonc`.)
+2. Build settings:
    - Build command: `npm run build`
-   - Build output directory: `dist`
+   - Deploy command: `npx wrangler deploy`
    - Root directory: *(leave empty)*
-   - Environment variable: `NODE_VERSION` = `22`
-4. **Save and Deploy.** Cloudflare builds the site and deploys the `functions/` directory as Pages Functions automatically.
+   - Production branch: the branch you deploy from (e.g. `main`)
+   - Build variable: `NODE_VERSION` = `22`
+3. Save. Each push to the production branch deploys. Pushes to other branches get preview URLs, if enabled under
+   *Settings → Build → Branch control*.
 
-### 2. Create and bind the KV namespace
-
-1. **Workers & Pages → KV → Create namespace**, named `sidebase-purchases`.
-2. Pages project → **Settings → Bindings → Add → KV namespace**: variable name **`PURCHASES`**, namespace `sidebase-purchases`.
-   Add it for both **Production** and **Preview**. You can use a separate namespace for preview.
-
-### 3. Add variables and secrets
-
-Pages project → **Settings → Variables and Secrets**, for the **Production** environment:
-
-- `STRIPE_SECRET_KEY`: type **Secret**
-- `STRIPE_WEBHOOK_SECRET`: type **Secret** (created in the next section)
-- `SITE_URL` = `https://sidebase.cc`
-- `STRIPE_PRICE_ID` *(optional)*
-
-For **Preview** deployments, use your **test-mode** keys.
-
-Redeploy after changing variables (Deployments → ⋯ → Retry deployment).
-
-### 4. Custom domain
-
-Pages project → **Custom domains → Set up a custom domain** → `sidebase.cc` (and optionally `www.sidebase.cc`). If the domain's DNS
-is on Cloudflare this is automatic. Otherwise, follow the CNAME instructions.
-
-### 5. Email
-
-The site lists `hello@sidebase.cc` (configurable in `src/lib/site.ts`). With DNS on Cloudflare, **Email Routing** can forward it to
-your inbox for free.
-
-### Deploying from the CLI (alternative)
+### Option B: deploy from your computer (CLI)
 
 ```bash
 npx wrangler login
-npm run pages:deploy
+npm run deploy          # builds, then runs wrangler deploy
 ```
+
+For CI or headless use, create an API token from the **Edit Cloudflare Workers** template and set `CLOUDFLARE_API_TOKEN`.
+
+### Secrets and variables
+
+Set them once. They survive later deploys:
+
+```bash
+npx wrangler secret put STRIPE_SECRET_KEY        # sk_test_… or sk_live_…
+npx wrangler secret put STRIPE_WEBHOOK_SECRET    # whsec_… (see the next section)
+```
+
+Alternatively, use the dashboard: Worker → **Settings → Variables and Secrets** → Add → type **Secret**.
+
+Optional plain variables (dashboard, or a `"vars"` block in `wrangler.jsonc`): `SITE_URL` = `https://sidebase.cc`, and
+`STRIPE_PRICE_ID`. If `SITE_URL` is unset, Stripe redirects back to whichever domain the visitor used, which is fine.
+
+### Custom domain
+
+Worker → **Settings → Domains & Routes → Add → Custom domain** → `sidebase.cc` (and optionally `www.sidebase.cc`). This requires
+the domain's DNS to be on Cloudflare (add the site under **Websites** first, and switch nameservers at your registrar).
+Until then, the site is live at `https://sidebase.<your-subdomain>.workers.dev`.
+
+### Email
+
+The site lists `hello@sidebase.cc` (configurable in `src/lib/site.ts`). With DNS on Cloudflare, **Email Routing** can forward it to
+your inbox for free.
 
 Every push to GitHub also runs CI (typecheck, tests, build) via `.github/workflows/ci.yml`.
 
@@ -203,8 +210,9 @@ Every push to GitHub also runs CI (typecheck, tests, build) via `.github/workflo
    - `checkout.session.completed`
    - `checkout.session.async_payment_succeeded`
    - `charge.refunded`
-4. Create it, then reveal the **Signing secret** (`whsec_…`) and save it as `STRIPE_WEBHOOK_SECRET` in Cloudflare.
-5. Redeploy, then use **Send test event** in Stripe. The endpoint answers `200` for valid signatures and `400` for invalid ones.
+4. Create it, then reveal the **Signing secret** (`whsec_…`) and save it with `npx wrangler secret put STRIPE_WEBHOOK_SECRET`
+   (or in the dashboard as a Secret).
+5. Use **Send test event** in Stripe. The endpoint answers `200` for valid signatures and `400` for invalid ones.
 
 Test mode and live mode have **separate** webhook endpoints and signing secrets. Create one in each.
 
@@ -215,7 +223,7 @@ Test mode and live mode have **separate** webhook endpoints and signing secrets.
    ```bash
    stripe listen --forward-to localhost:8788/api/stripe-webhook
    ```
-   Put the printed `whsec_…` into `.dev.vars` as `STRIPE_WEBHOOK_SECRET`, then run `npm run pages:dev`.
+   Put the printed `whsec_…` into `.dev.vars` as `STRIPE_WEBHOOK_SECRET`, then run `npm run dev:full`.
 3. Complete the finder, tick the consent box and click **Unlock My Full Report →**.
 4. Pay with test card **4242 4242 4242 4242**, any future expiry, any CVC and any postal code.
 5. You are redirected to `/report?session_id=cs_test_…`. The page verifies the payment and unlocks the report.
@@ -228,7 +236,7 @@ Test mode and live mode have **separate** webhook endpoints and signing secrets.
 2. In live mode, copy the **live** secret key (`sk_live_…`).
 3. Create the **live** webhook endpoint (same URL and events) and copy its live `whsec_…`.
 4. If you use `STRIPE_PRICE_ID`, create the product in live mode and use the **live** `price_…`.
-5. Update the Production secrets in Cloudflare and redeploy.
+5. Update the Worker's secrets in Cloudflare (`npx wrangler secret put …`). They take effect immediately.
 6. Check that `https://sidebase.cc/api/health` shows `"mode":"live"`, `"webhook":true` and `"purchasesStore":true`.
 7. Make one real purchase, then refund it to confirm the full loop.
 
@@ -239,9 +247,9 @@ Test mode and live mode have **separate** webhook endpoints and signing secrets.
 - [ ] Set up email forwarding for the support address.
 - [ ] Configure Stripe public details, branding and receipts (see [Stripe setup](#stripe-setup)).
 - [ ] Decide on sales tax or VAT collection (Stripe Tax).
-- [ ] Bind KV, add secrets, create the webhook, and confirm `/api/health`.
+- [ ] Add the Stripe secrets, create the webhook, attach `sidebase.cc`, and confirm `/api/health`.
 - [ ] Submit `https://sidebase.cc/sitemap.xml` in Google Search Console.
-- [ ] Optional: enable cookieless **Cloudflare Web Analytics** for the Pages project.
+- [ ] Optional: enable cookieless **Cloudflare Web Analytics** for the site.
 
 ## Editing content
 

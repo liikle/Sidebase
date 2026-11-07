@@ -1,0 +1,22 @@
+{
+  // Sidebase: a Cloudflare Worker serving the built React app (./dist) as static assets,
+  // plus the /api/* endpoints (Stripe checkout, webhook, report delivery).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sidebase",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "kv_namespaces": [
+    // Verified purchases (Checkout Session id -> answers + paid date). No personal data.
+    { "binding": "PURCHASES", "id": "0ea07ec9e9db464b89a2c3a080f70ebf" }
+  ],
+  "observability": { "enabled": true }
+  // Secrets (set with `npx wrangler secret put <NAME>` or in the dashboard, never here):
+  //   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+  // Optional plain variables: SITE_URL (e.g. https://sidebase.cc), STRIPE_PRICE_ID
+}
